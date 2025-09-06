@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RSRMart — Shop</title>
+  <meta name="description" content="RSRMart - Modern e-commerce demo" />
+  <!-- Tailwind CDN for quick styling -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* small custom styles */
+    .card-hover:hover { transform: translateY(-6px); box-shadow: 0 10px 20px rgba(2,6,23,0.08); }
+    .img-fit { object-fit: cover; width:100%; height:240px; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+
+  <!-- Header -->
+  <header class="bg-white shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold">RSR</div>
+        <div>
+          <h1 class="text-lg font-semibold">RSRMart</h1>
+          <p class="text-xs text-gray-500">Premium products — mobile friendly</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <button id="cartBtn" class="relative bg-gray-100 px-3 py-2 rounded-md">
+          <!-- simple cart icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2 6h12l-2-6M10 21h.01M17 21h.01"/></svg>
+          <span id="cartCount" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Hero -->
+    <section class="mb-8">
+      <div class="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg p-6 text-white">
+        <h2 class="text-2xl md:text-3xl font-bold">Trending styles — new arrivals</h2>
+        <p class="mt-2 text-sm opacity-90">Fast, clean and mobile-first shopping experience.</p>
+      </div>
+    </section>
+
+    <!-- Products grid -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">All Products</h3>
+        <input id="search" type="search" placeholder="Search products..." class="border px-3 py-2 rounded-md w-64" />
+      </div>
+
+      <div id="grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <!-- product cards injected here -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Product modal -->
+  <div id="modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-lg max-w-3xl w-full overflow-hidden">
+      <div class="flex justify-between items-start p-4 border-b">
+        <h4 id="modalTitle" class="font-semibold">Product</h4>
+        <button id="closeModal" class="text-gray-600">&times;</button>
+      </div>
+      <div class="p-4 md:flex gap-6">
+        <div class="md:w-1/2">
+          <img id="modalImg" src="" alt="" class="w-full rounded-md img-fit" />
+        </div>
+        <div class="md:w-1/2">
+          <p id="modalBrand" class="text-sm text-gray-500"></p>
+          <h3 id="modalName" class="text-xl font-bold my-2"></h3>
+          <div class="mb-2">
+            <span id="modalPrice" class="text-lg font-semibold text-green-600"></span>
+            <span id="modalMrp" class="text-sm text-gray-400 line-through ml-2"></span>
+          </div>
+          <p id="modalDesc" class="text-sm text-gray-700 mb-4"></p>
+
+          <div id="sizeContainer" class="mb-3"></div>
+
+          <div class="flex items-center gap-3">
+            <button id="addToCart" class="bg-blue-600 text-white px-4 py-2 rounded-md">Add to Cart</button>
+            <button id="buyNow" class="bg-gray-100 px-4 py-2 rounded-md">Buy Now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- simple toast -->
+  <div id="toast" class="fixed right-4 bottom-4 bg-black text-white px-4 py-2 rounded-md hidden"></div>
+
+  <!-- Scripts -->
+  <script>
+    let products = [];
+    const grid = document.getElementById('grid');
+    const search = document.getElementById('search');
+    const cartCount = document.getElementById('cartCount');
+    const modal = document.getElementById('modal');
+    const modalImg = document.getElementById('modalImg');
+    const modalName = document.getElementById('modalName');
+    const modalBrand = document.getElementById('modalBrand');
+    const modalPrice = document.getElementById('modalPrice');
+    const modalMrp = document.getElementById('modalMrp');
+    const modalDesc = document.getElementById('modalDesc');
+    const sizeContainer = document.getElementById('sizeContainer');
+    const addToCartBtn = document.getElementById('addToCart');
+    const buyNowBtn = document.getElementById('buyNow');
+    const closeModal = document.getElementById('closeModal');
+    const toast = document.getElementById('toast');
+    let activeProduct = null;
+
+    // load products.json
+    fetch('data/products.json')
+      .then(res => res.json())
+      .then(data => {
+        products = data;
+        renderGrid(products);
+        updateCartCount();
+      })
+      .catch(err => {
+        grid.innerHTML = '<p class="text-red-500">Products not found. Make sure <code>data/products.json</code> exists.</p>';
+        console.error(err);
+      });
+
+    // render product cards
+    function renderGrid(list) {
+      grid.innerHTML = '';
+      if (!list.length) { grid.innerHTML = '<p>No products found.</p>'; return; }
+      list.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-lg overflow-hidden card-hover transition-transform duration-200';
+        card.innerHTML = `
+          <div class="relative">
+            <img loading="lazy" src="${p.images && p.images[0] ? p.images[0] : 'https://via.placeholder.com/400'}" alt="${escapeHTML(p.title)}" class="img-fit" />
+            ${p.stock && p.stock <= 5 ? '<span class="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 text-xs rounded">Low stock</span>' : ''}
+          </div>
+          <div class="p-3">
+            <h4 class="font-medium text-sm">${escapeHTML(p.title)}</h4>
+            <div class="mt-2 flex items-center justify-between">
+              <div>
+                <div class="text-sm font-semibold text-green-600">₹${p.price}</div>
+                <div class="text-xs text-gray-400 line-through">₹${p.mrp || p.price}</div>
+              </div>
+              <button data-id="${p.id}" class="openBtn bg-gray-100 px-3 py-2 rounded-md text-sm">View</button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      // attach view buttons
+      document.querySelectorAll('.openBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const id = e.currentTarget.getAttribute('data-id');
+          openProduct(id);
+        });
+      });
+    }
+
+    // search
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      const filtered = products.filter(p => (p.title + ' ' + (p.brand||'') + ' ' + (p.category||'')).toLowerCase().includes(q));
+      renderGrid(filtered);
+    });
+
+    // open product modal
+    function openProduct(id) {
+      const p = products.find(x => x.id === id);
+      if (!p) return;
+      activeProduct = p;
+      modalImg.src = p.images && p.images[0] ? p.images[0] : 'https://via.placeholder.com/600';
+      modalName.textContent = p.title;
+      modalBrand.textContent = p.brand || '';
+      modalPrice.textContent = '₹' + p.price;
+      modalMrp.textContent = p.mrp ? '₹' + p.mrp : '';
+      modalDesc.textContent = p.description || '';
+      // sizes
+      sizeContainer.innerHTML = '';
+      if (p.sizes && p.sizes.length) {
+        const label = document.createElement('div'); label.className = 'text-sm text-gray-500 mb-2'; label.textContent = 'Size';
+        sizeContainer.appendChild(label);
+        const wrap = document.createElement('div'); wrap.className = 'flex gap-2 flex-wrap';
+        p.sizes.forEach(s => {
+          const b = document.createElement('button');
+          b.textContent = s;
+          b.className = 'px-3 py-1 border rounded text-sm';
+          b.addEventListener('click', () => {
+            document.querySelectorAll('#sizeContainer button').forEach(x=>x.classList.remove('bg-blue-600','text-white'));
+            b.classList.add('bg-blue-600','text-white');
+          });
+          wrap.appendChild(b);
+        });
+        sizeContainer.appendChild(wrap);
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    // close modal
+    closeModal.addEventListener('click', () => {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    });
+
+    // cart functions
+    function getCart() {
+      try { return JSON.parse(localStorage.getItem('rsr_cart') || '[]'); } catch(e){ return []; }
+    }
+    function saveCart(c) { localStorage.setItem('rsr_cart', JSON.stringify(c)); }
+    function updateCartCount() {
+      const c = getCart();
+      cartCount.textContent = c.reduce((sum,i)=>sum+i.qty,0) || 0;
+    }
+
+    addToCartBtn.addEventListener('click', () => {
+      if (!activeProduct) return;
+      const selectedSizeBtn = document.querySelector('#sizeContainer button.bg-blue-600');
+      const size = selectedSizeBtn ? selectedSizeBtn.textContent : null;
+      const cart = getCart();
+      const existing = cart.find(i => i.id === activeProduct.id && (i.size||'')=== (size||''));
+      if (existing) { existing.qty += 1; } else { cart.push({ id: activeProduct.id, title: activeProduct.title, price: activeProduct.price, qty:1, size: size }); }
+      saveCart(cart);
+      updateCartCount();
+      showToast('Added to cart');
+    });
+
+    buyNowBtn.addEventListener('click', () => {
+      // quick flow: add to cart and open cart (for demo we just show toast)
+      addToCartBtn.click();
+      showToast('Added. Proceed to checkout (implement Razorpay next).');
+    });
+
+    // cart button open (simple alert)
+    document.getElementById('cartBtn').addEventListener('click', () => {
+      const cart = getCart();
+      if (!cart.length) return alert('Cart empty');
+      let msg = 'Cart items:\\n';
+      cart.forEach(it => { msg += `${it.title} x ${it.qty} ${it.size? '('+it.size+')':''} - ₹${it.price*it.qty}\\n`; });
+      msg += '\\nSubtotal: ₹' + cart.reduce((s,i)=>s + i.price*i.qty,0);
+      alert(msg);
+    });
+
+    // small helpers
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.remove('hidden');
+      setTimeout(()=> toast.classList.add('hidden'), 2200);
+    }
+    function escapeHTML(s){ return String(s||'').replace(/[&<>"']/g, (m)=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]) ); }
+
+  </script>
+</body>
+  </html>
